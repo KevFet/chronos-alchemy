@@ -13,8 +13,10 @@ import { signInWithGoogle, logout } from "@/lib/auth";
 import { saveUserProgress, loadUserProgress, fetchItemsLibrary } from "@/lib/db";
 import { onAuthStateChanged, User } from "firebase/auth";
 
+import fallbackItems from "../data/items.json";
+
 export function GameContainer() {
-    const [allItems, setAllItems] = useState<Item[]>([]);
+    const [allItems, setAllItems] = useState<Item[]>(fallbackItems as Item[]);
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -29,8 +31,12 @@ export function GameContainer() {
     // Load items and auth state
     useEffect(() => {
         const init = async () => {
-            const items = await fetchItemsLibrary();
-            setAllItems(items || []);
+            try {
+                const items = await fetchItemsLibrary();
+                if (items && items.length > 0) setAllItems(items);
+            } catch (e) {
+                console.warn("Using local items library fallback");
+            }
 
             onAuthStateChanged(auth, async (u) => {
                 setUser(u);
