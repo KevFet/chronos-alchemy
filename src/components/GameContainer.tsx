@@ -35,6 +35,14 @@ export function GameContainer() {
     const [isHoveringPad, setIsHoveringPad] = useState(false);
     const [fusionFeedback, setFusionFeedback] = useState<{ x: number, y: number, type: 'success' | 'fail' } | null>(null);
 
+    // Optimized inventory view
+    const inventoryItems = useMemo(() => {
+        return progress.inventory
+            .map(id => allItems.find(item => item.id === id))
+            .filter((item): item is Item => !!item)
+            .filter(item => activeTab === 'all' || item.dimension === activeTab);
+    }, [progress.inventory, allItems, activeTab]);
+
     const isFirebaseMissing = !auth.app.options.apiKey || auth.app.options.apiKey === "dummy-key";
 
     // Load items and auth state
@@ -71,37 +79,50 @@ export function GameContainer() {
 
     // Add item from deck to workspace
     const addToWorkspace = (itemId: string) => {
-        setActiveItems(prev => [...prev, { id: itemId, instanceId: nextInstanceId, x: 0, y: 0 }]);
+        const container = document.getElementById('playground');
+        const rect = container?.getBoundingClientRect() || { width: 800, height: 600 };
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        const offset = (Math.random() - 0.5) * 100;
+
+        setActiveItems(prev => [...prev, {
+            id: itemId,
+            instanceId: nextInstanceId,
+            x: centerX + offset,
+            y: centerY + offset
+        }]);
         setNextInstanceId(id => id + 1);
     };
 
-    const handleDragEnd = (instanceId: number, info: any) => {
+    const handleDragEnd = (instanceId: number, event: any, info: any) => {
+        // Get workspace container relative coordinates
+        const container = document.getElementById('playground');
+        if (!container) return;
+        const rect = container.getBoundingClientRect();
+
+        const relativeX = info.point.x - rect.left;
+        const relativeY = info.point.y - rect.top;
+
         setActiveItems(prev => {
             const draggedIndex = prev.findIndex(i => i.instanceId === instanceId);
             if (draggedIndex === -1) return prev;
 
             const newItems = [...prev];
-            const dragged = { ...newItems[draggedIndex], x: info.point.x, y: info.point.y };
+            const dragged = { ...newItems[draggedIndex], x: relativeX, y: relativeY };
             newItems[draggedIndex] = dragged;
 
-            // Check for collisions
+            // Check for collisions with other items in workspace
             for (let i = 0; i < newItems.length; i++) {
                 if (i === draggedIndex) continue;
 
                 const other = newItems[i];
                 const dist = Math.sqrt(Math.pow(dragged.x - other.x, 2) + Math.pow(dragged.y - other.y, 2));
 
-                if (dist < 80) { // Collision threshold
+                if (dist < 100) { // Slightly larger threshold for better feel
                     const result = engine.fuse(dragged.id, other.id, progress);
                     if (result) {
-                        // Fusion Success!
                         setFusionFeedback({ x: other.x, y: other.y, type: 'success' });
                         setTimeout(() => setFusionFeedback(null), 1000);
-
-                        const newActiveBatch = [...newItems];
-
-                        const item1 = allItems.find(it => it.id === dragged.id)!;
-                        const item2 = allItems.find(it => it.id === other.id)!;
 
                         let nextDiscovered = [...progress.discoveredItems];
                         let nextInventory = [...progress.inventory];
@@ -110,6 +131,9 @@ export function GameContainer() {
                             nextDiscovered.push(result.id);
                             nextInventory.push(result.id);
                         }
+
+                        const item1 = allItems.find(it => it.id === dragged.id)!;
+                        const item2 = allItems.find(it => it.id === other.id)!;
 
                         if (item1.is_ephemeral) nextInventory = nextInventory.filter(id => id !== item1.id);
                         if (item2.is_ephemeral) nextInventory = nextInventory.filter(id => id !== item2.id);
@@ -120,7 +144,7 @@ export function GameContainer() {
                             inventory: nextInventory
                         }));
 
-                        const filtered = newActiveBatch.filter((_, idx) => idx !== i && idx !== draggedIndex);
+                        const filtered = newItems.filter((_, idx) => idx !== i && idx !== draggedIndex);
                         return [...filtered, { id: result.id, instanceId: nextInstanceId, x: other.x, y: other.y }];
                     } else {
                         setFusionFeedback({ x: dragged.x, y: dragged.y, type: 'fail' });
@@ -269,7 +293,7 @@ export function GameContainer() {
 
 
             {/* Main Workspace */}
-            <div className="flex-1 relative overflow-hidden flex items-center justify-center">
+            <div id="playground" className="flex-1 relative overflow-hidden flex items-center justify-center">
                 <FusionPad isHovered={isHoveringPad}>
                     <AnimatePresence>
                         {activeItems.length === 0 && (
@@ -289,19 +313,21 @@ export function GameContainer() {
                     {activeItems.map((ai) => {
                         const item = allItems.find(i => i.id === ai.id)!;
                         return (
-                            <div
+                            <motion.div
                                 key={ai.instanceId}
                                 className="absolute"
+                                initial={{ x: ai.x - 40, y: ai.y - 40 }} // Center the sphere
+                                style={{ x: ai.x - 40, y: ai.y - 40 }}
                                 onMouseEnter={() => setIsHoveringPad(true)}
                                 onMouseLeave={() => setIsHoveringPad(false)}
                             >
                                 <DataSphere
                                     item={item}
                                     state={ItemState.ACTIVE}
-                                    onDragEnd={(e, info) => handleDragEnd(ai.instanceId, info)}
+                                    onDragEnd={(e, info) => handleDragEnd(ai.instanceId, e, info)}
                                     layoutId={`instance-${ai.instanceId}`}
                                 />
-                            </div>
+                            </motion.div>
                         );
                     })}
                 </FusionPad>
@@ -330,8 +356,8 @@ export function GameContainer() {
             </div>
 
             {/* Deck / Inventory */}
-            <div className="h-64 glass-2026 border-t border-white/5 p-6 backdrop-blur-3xl relative z-20">
-                <div className="flex gap-8 mb-6 border-b border-white/5">
+            <div className="h-48 glass-2026 border-t border-white/5 p-4 backdrop-blur-3xl relative z-20 flex-shrink-0">
+                <div className="flex gap-6 mb-4 border-b border-white/5">
                     {(['all', 'matiere', 'concept', 'imaginaire'] as const).map(tab => (
                         <button
                             key={tab}
@@ -349,30 +375,22 @@ export function GameContainer() {
                     ))}
                 </div>
 
-                <div className="flex gap-8 overflow-x-auto pb-4 scrollbar-hide px-2">
-                    {progress.inventory
-                        .filter(itemId => {
-                            const item = allItems.find(i => i.id === itemId);
-                            if (!item) return false;
-                            if (activeTab === 'all') return true;
-                            return item.dimension === activeTab;
-                        })
-                        .map(itemId => {
-                            const item = allItems.find(i => i.id === itemId)!;
-                            const state = engine.getItemState(itemId, progress);
+                <div className="flex gap-6 overflow-x-auto pb-4 scrollbar-hide px-2">
+                    {inventoryItems.map(item => {
+                        const state = engine.getItemState(item.id, progress);
 
-                            if (state === ItemState.OBSOLETE) return null;
+                        if (state === ItemState.OBSOLETE) return null;
 
-                            return (
-                                <div
-                                    key={itemId}
-                                    onClick={() => state !== ItemState.HIBERNATION && addToWorkspace(itemId)}
-                                    className="cursor-pointer flex-shrink-0"
-                                >
-                                    <DataSphere item={item} state={state} />
-                                </div>
-                            );
-                        })}
+                        return (
+                            <div
+                                key={item.id}
+                                onClick={() => state !== ItemState.HIBERNATION && addToWorkspace(item.id)}
+                                className="cursor-pointer flex-shrink-0"
+                            >
+                                <DataSphere item={item} state={state} />
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         </div>

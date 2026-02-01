@@ -2,9 +2,31 @@ import { Item, ItemState, UserProgress } from '../types/game';
 
 export class GameEngine {
     private items: Map<string, Item>;
+    private recipeMap: Map<string, string> = new Map(); // key: "sorted_id1+sorted_id2", value: resultId
+    private ingredientToResultMap: Map<string, Set<string>> = new Map(); // key: ingredientId, value: Set of resultIds
 
     constructor(items: Item[]) {
         this.items = new Map(items.map(item => [item.id, item]));
+        this.buildLookups();
+    }
+
+    private buildLookups() {
+        for (const item of this.items.values()) {
+            for (const recipe of item.recipes) {
+                if (recipe.length === 2) {
+                    const key = [...recipe].sort().join('+');
+                    this.recipeMap.set(key, item.id);
+
+                    // Build reverse map for obsolescence
+                    recipe.forEach(ing => {
+                        if (!this.ingredientToResultMap.has(ing)) {
+                            this.ingredientToResultMap.set(ing, new Set());
+                        }
+                        this.ingredientToResultMap.get(ing)!.add(item.id);
+                    });
+                }
+            }
+        }
     }
 
     /**
@@ -12,25 +34,15 @@ export class GameEngine {
      * Returns the resulting Item if a recipe exists, otherwise null.
      */
     public fuse(item1Id: string, item2Id: string, progress: UserProgress): Item | null {
-        const ids = [item1Id, item2Id].sort();
+        const key = [item1Id, item2Id].sort().join('+');
+        const resultId = this.recipeMap.get(key);
 
-        for (const item of this.items.values()) {
-            // Time Lock (Verrou Temporel): If item belongs to a future era, it can't be created yet
-            if (item.era_unlock > progress.currentEra) continue;
+        if (!resultId) return null;
 
-            for (const recipe of item.recipes) {
-                const sortedRecipe = [...recipe].sort();
-                if (
-                    sortedRecipe.length === 2 &&
-                    sortedRecipe[0] === ids[0] &&
-                    sortedRecipe[1] === ids[1]
-                ) {
-                    return item;
-                }
-            }
-        }
+        const resultItem = this.items.get(resultId);
+        if (!resultItem || resultItem.era_unlock > progress.currentEra) return null;
 
-        return null;
+        return resultItem;
     }
 
     /**
@@ -40,38 +52,32 @@ export class GameEngine {
         const item = this.items.get(itemId);
         if (!item) throw new Error(`Item ${itemId} not found`);
 
-        // 1. Hibernation: Next recipe belongs to a future era not yet unlocked
         if (item.era_unlock > progress.currentEra) {
             return ItemState.HIBERNATION;
         }
 
-        // 2. Active: Discovered and usable
         const isDiscovered = progress.discoveredItems.includes(itemId);
         if (isDiscovered) {
-            // Check for Obsolete: No future recipes possible in current or future reachable eras
             if (this.isObsolete(itemId, progress)) {
                 return ItemState.OBSOLETE;
             }
             return ItemState.ACTIVE;
         }
 
-        return ItemState.HIBERNATION; // Default for undiscovered items? Actually, and undiscovered item shouldn't be in the deck usually.
+        return ItemState.HIBERNATION;
     }
 
     /**
      * Checks if an item is obsolete.
-     * Obsolete: No more recipes can use this item in the future.
+     * Obsolete: All items it can produce are already discovered.
      */
     private isObsolete(itemId: string, progress: UserProgress): boolean {
-        // Check if this item is an ingredient in ANY remaining undiscovered recipes.
-        for (const item of this.items.values()) {
-            // If the item itself is undiscovered, it might still be needed
-            if (!progress.discoveredItems.includes(item.id)) {
-                for (const recipe of item.recipes) {
-                    if (recipe.includes(itemId)) {
-                        return false;
-                    }
-                }
+        const possibleResults = this.ingredientToResultMap.get(itemId);
+        if (!possibleResults) return true; // Can't produce anything
+
+        for (const resultId of possibleResults) {
+            if (!progress.discoveredItems.includes(resultId)) {
+                return false; // Still needed for at least one undiscovered item
             }
         }
         return true;
@@ -79,13 +85,12 @@ export class GameEngine {
 
     /**
      * Verifies if the current era can be advanced.
-     * Advancement is blocked until the "Pivot" item of the current era is created.
      */
     public canAdvanceEra(progress: UserProgress): boolean {
-        const pivotsInCurrentEra = Array.from(this.items.values()).filter(
-            item => item.era_unlock === progress.currentEra && item.is_pivot
-        );
-
-        return pivotsInCurrentEra.every(pivot => progress.discoveredItems.includes(pivot.id));
+        // This is still O(N) but over a much smaller set usually. 
+        // Could be optimized but likely not the bottleneck.
+        const eraItems = Array.from(this.items.values()).filter(i => i.era_unlock === progress.currentEra && i.is_pivot);
+        if (eraItems.length === 0) return true;
+        return eraItems.every(pivot => progress.discoveredItems.includes(pivot.id));
     }
 }
