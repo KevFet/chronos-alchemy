@@ -19,6 +19,7 @@ export function GameContainer() {
     const [allItems, setAllItems] = useState<Item[]>(fallbackItems as Item[]);
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isMounted, setIsMounted] = useState(false);
 
     const engine = useMemo(() => new GameEngine(allItems), [allItems]);
 
@@ -28,8 +29,17 @@ export function GameContainer() {
         inventory: ["terre", "eau", "feu", "air"]
     });
 
+    const [activeItems, setActiveItems] = useState<{ id: string; instanceId: number; x: number; y: number }[]>([]);
+    const [nextInstanceId, setNextInstanceId] = useState(0);
+    const [activeTab, setActiveTab] = useState<Dimension | 'all'>('all');
+    const [isHoveringPad, setIsHoveringPad] = useState(false);
+    const [fusionFeedback, setFusionFeedback] = useState<{ x: number, y: number, type: 'success' | 'fail' } | null>(null);
+
+    const isFirebaseMissing = !auth.app.options.apiKey || auth.app.options.apiKey === "dummy-key";
+
     // Load items and auth state
     useEffect(() => {
+        setIsMounted(true);
         const init = async () => {
             try {
                 const items = await fetchItemsLibrary();
@@ -58,14 +68,6 @@ export function GameContainer() {
             saveUserProgress(user.uid, progress);
         }
     }, [progress, user, loading]);
-
-    const [activeItems, setActiveItems] = useState<{ id: string; instanceId: number; x: number; y: number }[]>([]);
-    const [nextInstanceId, setNextInstanceId] = useState(0);
-    const [activeTab, setActiveTab] = useState<Dimension | 'all'>('all');
-    const [isHoveringPad, setIsHoveringPad] = useState(false);
-    const [fusionFeedback, setFusionFeedback] = useState<{ x: number, y: number, type: 'success' | 'fail' } | null>(null);
-
-    const isFirebaseMissing = !auth.app.options.apiKey || auth.app.options.apiKey === "dummy-key";
 
     // Add item from deck to workspace
     const addToWorkspace = (itemId: string) => {
@@ -160,6 +162,8 @@ export function GameContainer() {
         return { discovered: discoveredInEra.length, total: itemsInEra.length };
     }, [allItems, progress.discoveredItems, progress.currentEra]);
 
+    if (!isMounted) return null;
+
     return (
         <div
             className="flex flex-col h-screen w-screen overflow-hidden text-white font-sans transition-all duration-1000 aurora-bg"
@@ -241,7 +245,7 @@ export function GameContainer() {
                 </div>
             </div>
 
-            {isFirebaseMissing && (
+            {isMounted && isFirebaseMissing && (
                 <motion.div
                     initial={{ y: -20, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
