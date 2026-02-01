@@ -21,6 +21,6 @@ jobs:
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_CHRONOS_ALCHEMY }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_CHRONOS_ALCHEMY_KFV }}'
           channelId: live
-          projectId: chronos-alchemy
+          projectId: chronos-alchemy-kfv
