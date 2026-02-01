@@ -16,7 +16,12 @@ async function uploadLibrary() {
 
         chunk.forEach(item => {
             const docRef = doc(collectionRef, item.id);
-            batch.set(docRef, item);
+            // Firestore doesn't support nested arrays, so we flatten recipes
+            const firestoreData = {
+                ...item,
+                recipes: item.recipes.map(r => r.join('+'))
+            };
+            batch.set(docRef, firestoreData);
         });
 
         await batch.commit();

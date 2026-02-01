@@ -174,7 +174,7 @@ export function GameContainer() {
             } as any}
         >
             {/* Header / Era Info */}
-            <div className="p-6 flex justify-between items-center glass-2026 m-4 flex-shrink-0 relative z-20">
+            <div className="mt-6 mx-6 mb-2 flex justify-between items-center glass-2026 flex-shrink-0 relative z-20">
                 <div className="flex items-center gap-6">
                     <div className="relative">
                         <motion.div

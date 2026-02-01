@@ -102,7 +102,7 @@
   {
     "id": "item_8",
     "emoji": "✨",
-    "name": "Objet 8",
+    "name": "Étincelle",
     "era_unlock": 0,
     "is_pivot": false,
     "is_ephemeral": true,
@@ -117,7 +117,7 @@
   {
     "id": "item_9",
     "emoji": "✨",
-    "name": "Objet 9",
+    "name": "Lave",
     "era_unlock": 0,
     "is_pivot": false,
     "is_ephemeral": true,
@@ -132,7 +132,7 @@
   {
     "id": "item_10",
     "emoji": "✨",
-    "name": "Objet 10",
+    "name": "Pierre",
     "era_unlock": 0,
     "is_pivot": false,
     "is_ephemeral": true,
@@ -147,7 +147,7 @@
   {
     "id": "item_11",
     "emoji": "✨",
-    "name": "Objet 11",
+    "name": "Vie",
     "era_unlock": 0,
     "is_pivot": false,
     "is_ephemeral": true,

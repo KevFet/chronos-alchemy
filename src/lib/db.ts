@@ -21,13 +21,23 @@ export const fetchItemsLibrary = async (): Promise<Item[]> => {
     if (typeof window !== "undefined") {
         const cached = localStorage.getItem("items_library");
         if (cached) {
-            return JSON.parse(cached);
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                return parsed;
+            }
         }
     }
 
     const itemsRef = collection(db, ITEMS_COLLECTION);
     const snap = await getDocs(itemsRef);
-    const items = snap.docs.map(doc => doc.data() as Item);
+    const items = snap.docs.map(doc => {
+        const data = doc.data();
+        return {
+            ...data,
+            id: doc.id,
+            recipes: (data.recipes || []).map((r: string) => r.split('+'))
+        } as Item;
+    });
 
     // Cache in localStorage
     if (typeof window !== "undefined") {
